@@ -9,13 +9,13 @@
 
 #if os(OSX) || os(iOS)
 import Darwin
-#elseif os(Linux)
+#elseif os(Linux) || os(Haiku)
 import Glibc
 #endif
 
 #if os(OSX) || os(iOS)
 fileprivate let _NSPageSize = Int(vm_page_size)
-#elseif os(Linux) || os(Android)
+#elseif os(Linux) || os(Android) || os(Haiku)
 fileprivate let _NSPageSize = Int(getpagesize())
 #endif
 

@@ -219,34 +219,8 @@ fileprivate extension _EasyHandle {
     /// - Note: The error value is set only on failure. You can't use it to
     ///   determine *if* something failed or not, only *why* it failed.
     func urlErrorCode(for easyCode: CFURLSessionEasyCode) -> Int? {
-        switch (easyCode, CInt(connectFailureErrno)) {
-        case (CFURLSessionEasyCodeOK, _):
-            return nil
-        case (_, ECONNREFUSED):
-            return NSURLErrorCannotConnectToHost
-        case (CFURLSessionEasyCodeUNSUPPORTED_PROTOCOL, _):
-            return NSURLErrorUnsupportedURL
-        case (CFURLSessionEasyCodeURL_MALFORMAT, _):
-            return NSURLErrorBadURL
-        case (CFURLSessionEasyCodeCOULDNT_RESOLVE_HOST, _):
-            // Oddly, this appears to happen for malformed URLs, too.
-            return NSURLErrorCannotFindHost
-        case (CFURLSessionEasyCodeRECV_ERROR, ECONNRESET):
-            return NSURLErrorNetworkConnectionLost
-        case (CFURLSessionEasyCodeSEND_ERROR, ECONNRESET):
-            return NSURLErrorNetworkConnectionLost
-        case (CFURLSessionEasyCodeGOT_NOTHING, _):
-            return NSURLErrorBadServerResponse
-        case (CFURLSessionEasyCodeABORTED_BY_CALLBACK, _):
-            return NSURLErrorUnknown // Or NSURLErrorCancelled if we're in such a state
-        case (CFURLSessionEasyCodeCOULDNT_CONNECT, ETIMEDOUT):
-            return NSURLErrorTimedOut
-        case (CFURLSessionEasyCodeOPERATION_TIMEDOUT, _):
-            return NSURLErrorTimedOut
-        default:
-            //TODO: Need to map to one of the NSURLError... constants
-            return NSURLErrorUnknown
-        }
+                  return NSURLErrorUnknown
+
     }
 }
 

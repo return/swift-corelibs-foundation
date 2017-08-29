@@ -7,7 +7,7 @@
 // See http://swift.org/CONTRIBUTORS.txt for the list of Swift project authors
 //
 
-#if !os(Android) // not available
+#if !os(Android) && !os(Haiku) // not available
 import CoreFoundation
 
 #if os(OSX) || os(iOS)

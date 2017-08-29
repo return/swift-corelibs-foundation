@@ -11,7 +11,7 @@ import CoreFoundation
 
 #if os(OSX) || os(iOS)
 import Darwin
-#elseif os(Linux) || CYGWIN
+#elseif os(Linux) || CYGWIN || os(Haiku)
 import Glibc
 #endif
 
@@ -431,13 +431,20 @@ open class NSData : NSObject, NSCopying, NSMutableCopying, NSSecureCoding {
         var bytesRemaining = length
         while bytesRemaining > 0 {
             var bytesWritten : Int
+            #if os(Haiku)
+             repeat {
+                    bytesWritten = Glibc.write(fd, buf.advanced(by: length - bytesRemaining), bytesRemaining)
+            } while (bytesWritten < 0 && errno == -4)
+            #else
             repeat {
                 #if os(OSX) || os(iOS)
                     bytesWritten = Darwin.write(fd, buf.advanced(by: length - bytesRemaining), bytesRemaining)
                 #elseif os(Linux) || os(Android) || CYGWIN
                     bytesWritten = Glibc.write(fd, buf.advanced(by: length - bytesRemaining), bytesRemaining)
                 #endif
-            } while (bytesWritten < 0 && errno == EINTR)
+            } 
+            while (bytesWritten < 0 && errno == EINTR)
+            #endif
             if bytesWritten <= 0 {
                 throw _NSErrorWithErrno(errno, reading: false, path: path)
             } else {
@@ -454,11 +461,21 @@ open class NSData : NSObject, NSCopying, NSMutableCopying, NSSecureCoding {
         if useAuxiliaryFile {
             // Preserve permissions.
             var info = stat()
+            #if os(Haiku)
             if lstat(path, &info) == 0 {
                 mode = mode_t(info.st_mode)
-            } else if errno != ENOENT && errno != ENAMETOOLONG {
+            }
+            else if errno != 24 && errno != 14 {
                 throw _NSErrorWithErrno(errno, reading: false, path: path)
             }
+            #else
+            if lstat(path, &info) == 0 {
+                mode = mode_t(info.st_mode)
+            }
+            else if errno != ENOENT && errno != ENAMETOOLONG {
+                throw _NSErrorWithErrno(errno, reading: false, path: path)
+            }
+            #endif
             let (newFD, path) = try self.makeTemporaryFile(inDirectory: path._nsObject.deletingLastPathComponent)
             fd = newFD
             auxFilePath = path

@@ -9,7 +9,7 @@
 
 #if os(OSX) || os(iOS)
     import Darwin
-#elseif os(Linux) || CYGWIN
+#elseif os(Linux) || CYGWIN || os(Haiku)
     import Glibc
 #endif
 
@@ -129,7 +129,7 @@ open class FileManager : NSObject {
                 }
                 #if os(OSX) || os(iOS)
                     let modeT = number.uint16Value
-                #elseif os(Linux) || os(Android) || CYGWIN
+                #elseif os(Linux) || os(Android) || CYGWIN || os(Haiku)
                     let modeT = number.uint32Value
                 #endif
                 if chmod(path, mode_t(modeT)) != 0 {
@@ -161,7 +161,11 @@ open class FileManager : NSObject {
             } else if isDir {
                 return
             } else {
+            	#if os(Haiku)
+            	throw _NSErrorWithErrno(-1, reading: false, path: path)
+            	#else
                 throw _NSErrorWithErrno(EEXIST, reading: false, path: path)
+                #endif
             }
         } else {
             if mkdir(path, S_IRWXU | S_IRWXG | S_IRWXO) != 0 {
@@ -246,22 +250,33 @@ open class FileManager : NSObject {
             // TODO: `entryName` should be limited in length to `entry.memory.d_namlen`.
             if entryName != "." && entryName != ".." {
                 contents.append(entryName)
-                    
+                #if os(Haiku)
+                // Implement for Haiku using stat
+                NSUnimplemented()
+                #else
                 let entryType = withUnsafePointer(to: &entry!.pointee.d_type) { (ptr) -> Int32 in
                     return Int32(ptr.pointee)
                 }
+                #endif
                 #if os(OSX) || os(iOS)
                     let tempEntryType = entryType
                 #elseif os(Linux) || os(Android) || CYGWIN
                     let tempEntryType = Int32(entryType)
                 #endif
 
+
+                #if os(Haiku)
+                // FIXME: Implement for Haiku using stat
+                NSUnimplemented()
+                #else
                 if tempEntryType == Int32(DT_DIR) {
                     let subPath: String = path + "/" + entryName
 
                     let entries =  try subpathsOfDirectory(atPath: subPath)
                     contents.append(contentsOf: entries.map({file in "\(entryName)/\(file)"}))
                 }
+                #endif
+
             }
             
             entry = readdir(dir!)
@@ -380,6 +395,9 @@ open class FileManager : NSObject {
         guard !self.fileExists(atPath: dstPath) else {
             throw NSError(domain: NSCocoaErrorDomain, code: CocoaError.fileWriteFileExists.rawValue, userInfo: [NSFilePathErrorKey : NSString(dstPath)])
         }
+        #if os(Haiku)
+        NSUnimplemented()
+        #else
         if rename(srcPath, dstPath) != 0 {
             if errno == EXDEV {
                 // TODO: Copy and delete.
@@ -388,6 +406,7 @@ open class FileManager : NSObject {
                 throw _NSErrorWithErrno(errno, reading: false, path: srcPath)
             }
         }
+        #endif
     }
     
     open func linkItem(atPath srcPath: String, toPath dstPath: String) throws {
@@ -406,6 +425,8 @@ open class FileManager : NSObject {
     }
 
     open func removeItem(atPath path: String) throws {
+    	#if os(Haiku)
+    	#else
         if rmdir(path) == 0 {
             return
         } else if errno == ENOTEMPTY {
@@ -451,6 +472,7 @@ open class FileManager : NSObject {
         } else if unlink(path) != 0 {
             throw _NSErrorWithErrno(errno, reading: false, path: path)
         }
+        #endif
     }
     
     open func copyItem(at srcURL: URL, to dstURL: URL) throws {
@@ -987,7 +1009,11 @@ extension FileManager {
                 ps.deinitialize(count: 2)
                 ps.deallocate(capacity: 2)
             } else {
+            	#if os(Haiku)
+            	_rootError = _NSErrorWithErrno(ENOERR, reading: true, url: url)
+            	#else
                 _rootError = _NSErrorWithErrno(ENOENT, reading: true, url: url)
+                #endif
             }
         }
         

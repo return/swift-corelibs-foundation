@@ -57,12 +57,15 @@ public var NSCoderValueNotFoundError: Int                    { return CocoaError
 
 #if os(OSX) || os(iOS)
     import Darwin
-#elseif os(Linux) || CYGWIN
+#elseif os(Linux) || CYGWIN || os(Haiku)
     import Glibc
 #endif
 
 internal func _NSErrorWithErrno(_ posixErrno : Int32, reading : Bool, path : String? = nil, url : URL? = nil, extraUserInfo : [String : Any]? = nil) -> NSError {
     var cocoaError : CocoaError.Code
+    #if os(Haiku)
+    cocoaError = CocoaError.fileReadUnknown
+    #else
     if reading {
         switch posixErrno {
             case EFBIG: cocoaError = CocoaError.fileReadTooLarge
@@ -82,7 +85,7 @@ internal func _NSErrorWithErrno(_ posixErrno : Int32, reading : Bool, path : Str
             default: cocoaError = CocoaError.fileWriteUnknown
         }
     }
-    
+    #endif
     var userInfo = extraUserInfo ?? [String : Any]()
     if let path = path {
         userInfo[NSFilePathErrorKey] = path._nsObject

@@ -10,7 +10,7 @@
 
 #if os(OSX) || os(iOS)
 import Darwin
-#elseif os(Linux) || CYGWIN
+#elseif os(Linux) || CYGWIN || os(Haiku)
 import Glibc
 #endif
 
@@ -151,7 +151,7 @@ open class NSRecursiveLock: NSObject, NSLocking {
     
     public override init() {
         super.init()
-#if CYGWIN
+#if CYGWIN || os(Haiku)
         var attrib : pthread_mutexattr_t? = nil
 #else
         var attrib = pthread_mutexattr_t()

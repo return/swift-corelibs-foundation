@@ -28,6 +28,10 @@ elif Configuration.current.target.sdk == OSType.Win32 and Configuration.current.
 	foundation.CFLAGS = '-DDEPLOYMENT_TARGET_LINUX -D_GNU_SOURCE -mcmodel=large '
 	foundation.LDFLAGS = '${SWIFT_USE_LINKER} -lswiftGlibc `icu-config --ldflags` -Wl,-defsym,__CFConstantStringClassReference=_TMC10Foundation19_NSCFConstantString,--allow-multiple-definition '
 	swift_cflags += ['-DCYGWIN']
+elif Configuration.current.target.sdk == OSType.Haiku:
+	foundation.CFLAGS = '-DDEPLOYMENT_TARGET_HAIKU -I/system/develop/headers/posix -I${SYSROOT}/system/develop/headers  -I/system/develop/headers/ -I/system/develop/headers/libxml2 -I/system/develop/headers/curl -I${SYSROOT}/system/develop/headers/libxml2 -I${SYSROOT}/system/develop/headers/curl'
+	foundation.LDFLAGS = '-lroot -lnetwork -lswiftGlibc `${PKG_CONFIG} icu-uc icu-i18n --libs` -Wl,-defsym,__CFConstantStringClassReference=_TMC10Foundation19_NSCFConstantString -Wl,-Bsymbolic '
+	swift_cflags += ['-I${SYSROOT}/system/develop/headers/libxml2','-I${SYSROOT}/system/develop/headers/curl', '-I/system/develop/headers/posix','-I/system/develop/headers/posix','-sdk /','-Xcc -D_BSD_SOURCE=1']
 
 if Configuration.current.build_mode == Configuration.Debug:
         foundation.LDFLAGS += ' -lswiftSwiftOnoneSupport '
@@ -63,7 +67,7 @@ foundation.CFLAGS += " ".join([
 	'-Wno-unused-function',
 	'-I${SYSROOT}/usr/include/libxml2',
 	'-I${SYSROOT}/usr/include/curl',
-	'-I./',
+	'-I./'
 ])
 
 swift_cflags += [
@@ -93,18 +97,18 @@ foundation.LDFLAGS += '-ldl -lm -lswiftCore -lxml2 '
 
 # Configure use of Dispatch in CoreFoundation and Foundation if libdispatch is being built
 if "LIBDISPATCH_SOURCE_DIR" in Configuration.current.variables:
-	foundation.CFLAGS += " "+" ".join([
-		'-DDEPLOYMENT_ENABLE_LIBDISPATCH',
-		'-I'+Configuration.current.variables["LIBDISPATCH_SOURCE_DIR"],
-		'-I'+Configuration.current.variables["LIBDISPATCH_BUILD_DIR"]+'/tests'  # for include of dispatch/private.h in CF
-	])
-	swift_cflags += ([
-		'-DDEPLOYMENT_ENABLE_LIBDISPATCH',
-		'-I'+Configuration.current.variables["LIBDISPATCH_SOURCE_DIR"],
-		'-I'+Configuration.current.variables["LIBDISPATCH_BUILD_DIR"]+'/src/swift',
-		'-Xcc -fblocks'
-	])
-	foundation.LDFLAGS += '-ldispatch -L'+Configuration.current.variables["LIBDISPATCH_BUILD_DIR"]+'/src/.libs -rpath \$$ORIGIN '
+       foundation.CFLAGS += " "+" ".join([
+               '-DDEPLOYMENT_ENABLE_LIBDISPATCH',
+               '-I'+Configuration.current.variables["LIBDISPATCH_SOURCE_DIR"],
+               '-I'+Configuration.current.variables["LIBDISPATCH_BUILD_DIR"]+'/tests'  # for include of dispatch/private.h in CF
+       ])
+       swift_cflags += ([
+               '-DDEPLOYMENT_ENABLE_LIBDISPATCH',
+               '-I'+Configuration.current.variables["LIBDISPATCH_SOURCE_DIR"],
+               '-I'+Configuration.current.variables["LIBDISPATCH_BUILD_DIR"]+'/src/swift',
+               '-Xcc -fblocks'
+       ])
+       foundation.LDFLAGS += '-ldispatch -L'+Configuration.current.variables["LIBDISPATCH_BUILD_DIR"]+'/src/.libs -rpath \$$ORIGIN '
 
 foundation.SWIFTCFLAGS = " ".join(swift_cflags)
 

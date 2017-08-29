@@ -99,6 +99,8 @@ TARGET_CFLAGS         = -fcolor-diagnostics -fdollars-in-identifiers -fblocks -f
         if Configuration.current.bootstrap_directory is not None:
             c_flags += """  -I${BOOTSTRAP_DIR}/usr/include -I${BOOTSTRAP_DIR}/usr/local/include """
             c_flags += """  -I${TARGET_BOOTSTRAP_DIR}/usr/include -I${TARGET_BOOTSTRAP_DIR}/usr/local/include """
+            # Haiku support
+            c_flags += """  -I${TARGET_BOOTSTRAP_DIR}/system/develop/headers -I${TARGET_BOOTSTRAP_DIR}/system/develop/headers/posix """
         
         c_flags += Configuration.current.extra_c_flags
 

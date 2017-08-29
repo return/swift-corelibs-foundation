@@ -349,6 +349,9 @@ class Target:
                 self.environ = EnvironmentType.UnknownEnvironment
         elif "darwin" in triple:
             self.sdk = OSType.MacOSX
+        elif "haiku" in triple:
+            self.sdk = OSType.Haiku
+            self.dynamic_library_suffix = ".so"
         else:
             print("Unknown platform")
 
@@ -373,6 +376,8 @@ class Target:
             triple += "-freebsd11.0"
         elif platform.system() == "CYGWIN_NT-10.0":
             triple += "-windows-cygnus"
+        elif platform.system() == "Haiku":
+            triple += "-haiku"
         else:
             # TODO: This should be a bit more exhaustive
             print("unknown host os")
@@ -397,6 +402,8 @@ class Target:
             triple += "-unknown-freebsd"
         elif self.sdk == OSType.Win32 and self.environ == EnvironmentType.Cygnus:
             triple += "-unknown-windows-cygnus"
+        elif self.sdk == OSType.Haiku:
+            triple += "-unknown-haiku"
         else:
             print("unknown sdk for swift")
             return None
@@ -415,6 +422,8 @@ class Target:
             return "freebsd"
         elif self.sdk == OSType.Win32:
             return "cygwin"
+        elif self.sdk == OSType.Haiku:
+            return "haiku"
         else:
             print("unknown sdk for swift")
             return None

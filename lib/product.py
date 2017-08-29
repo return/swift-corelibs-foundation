@@ -116,7 +116,7 @@ class DynamicLibrary(Library):
         self.product_name = Configuration.current.target.dynamic_library_prefix + name + Configuration.current.target.dynamic_library_suffix
 
     def generate(self):
-        if Configuration.current.target.sdk == OSType.Linux or Configuration.current.target.sdk == OSType.FreeBSD:
+        if Configuration.current.target.sdk == OSType.Linux or Configuration.current.target.sdk == OSType.FreeBSD or Configuration.current.target.sdk == OSType.Haiku:
             self.conformance_begin = '${SDKROOT}/lib/swift/${OS}/${ARCH}/swift_begin.o' 
             self.conformance_end = '${SDKROOT}/lib/swift/${OS}/${ARCH}/swift_end.o' 
             return Library.generate(self, ["-shared", "-Wl,-soname," + self.product_name, "-Wl,--no-undefined"])

@@ -44,6 +44,10 @@
 
 #endif
 
+#if DEPLOYMENT_TARGET_HAIKU
+static struct stat fileBuf;
+#endif
+
 CF_INLINE int openAutoFSNoWait() {
 #if DEPLOYMENT_TARGET_WINDOWS
     return -1;
@@ -341,7 +345,7 @@ CF_PRIVATE CFMutableArrayRef _CFCreateContentsOfDirectory(CFAllocatorRef alloc, 
     FindClose(handle);
     pathBuf[pathLength] = '\0';
 
-#elif DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_FREEBSD
+#elif DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_FREEBSD || DEPLOYMENT_TARGET_HAIKU
     uint8_t extBuff[CFMaxPathSize];
     int extBuffInteriorDotCount = 0; //people insist on using extensions like ".trace.plist", so we need to know how many dots back to look :(
     
@@ -438,6 +442,8 @@ CF_PRIVATE CFMutableArrayRef _CFCreateContentsOfDirectory(CFAllocatorRef alloc, 
             dirURL = CFURLCreateFromFileSystemRepresentation(alloc, (uint8_t *)dirPath, pathLength, true);
             releaseBase = true;
         }
+#if !DEPLOYMENT_TARGET_HAIKU
+        
         if (dp->d_type == DT_DIR || dp->d_type == DT_UNKNOWN || dp->d_type == DT_LNK || dp->d_type == DT_WHT) {
             Boolean isDir = (dp->d_type == DT_DIR);
             if (!isDir) {
@@ -463,6 +469,26 @@ CF_PRIVATE CFMutableArrayRef _CFCreateContentsOfDirectory(CFAllocatorRef alloc, 
             fileURL = CFURLCreateFromFileSystemRepresentationRelativeToBase (alloc, (uint8_t *)dp->d_name, dp->d_namlen, false, dirURL);
 #endif
         }
+#else
+         struct statinfo statBuf;
+         stat(dp->d_name, &statBuf);
+         if(S_ISDIR(statBuf.st_mode) || S_ISLNK(statBuf.st_mode) || S_ISREG(statBuf.st_mode)) {
+         	 Boolean isDir = S_ISDIR(statBuf.st_mode);
+         	  if (!isDir) {
+         	  	char subdirPath[CFMaxPathLength];
+                struct statinfo statBuf;
+                strlcpy(subdirPath, dirPath, sizeof(subdirPath));
+                strlcat(subdirPath, "/", sizeof(subdirPath));
+                strlcat(subdirPath, dp->d_name, sizeof(subdirPath));
+                if (stat(subdirPath, &statBuf) == 0) {
+                    isDir = ((statBuf.st_mode & S_IFMT) == S_IFDIR);
+                }
+         	  }
+         	fileURL = CFURLCreateFromFileSystemRepresentationRelativeToBase(alloc, (uint8_t *)dp->d_name, namelen, isDir, dirURL);
+         } else {
+            fileURL = CFURLCreateFromFileSystemRepresentationRelativeToBase (alloc, (uint8_t *)dp->d_name, namelen, false, dirURL);
+       }
+#endif 
         CFArrayAppendValue(files, fileURL);
         CFRelease(fileURL);
     }
@@ -544,7 +570,7 @@ CF_PRIVATE SInt32 _CFGetPathProperties(CFAllocatorRef alloc, char *path, Boolean
     
     if (modTime != NULL) {
         if (fileExists) {
-#if DEPLOYMENT_TARGET_WINDOWS || DEPLOYMENT_TARGET_LINUX
+#if DEPLOYMENT_TARGET_WINDOWS || DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_HAIKU
             struct timespec ts = {statBuf.st_mtime, 0};
 #else
             struct timespec ts = statBuf.st_mtimespec;
@@ -1068,15 +1094,21 @@ CF_PRIVATE void _CFIterateDirectory(CFStringRef directoryPath, Boolean appendSla
     struct dirent *dent;
     if ((dirp = opendir(directoryPathBuf))) {
         while ((dent = readdir(dirp))) {
-#if DEPLOYMENT_TARGET_LINUX
+#if DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_HAIKU
             CFIndex nameLen = strlen(dent->d_name);
 #else
             CFIndex nameLen = dent->d_namlen;
 #endif
+
+#if !defined(DEPLOYMENT_TARGET_HAIKU)
             if (0 == nameLen || 0 == dent->d_fileno || ('.' == dent->d_name[0] && (1 == nameLen || (2 == nameLen && '.' == dent->d_name[1]) || '_' == dent->d_name[1]))) {
                 continue;
             }
-            
+#else
+            if (0 == nameLen || ('.' == dent->d_name[0] && (1 == nameLen || (2 == nameLen && '.' == dent->d_name[1]) || '_' == dent->d_name[1]))) {
+                continue;
+            }
+#endif            
             // This part is easy
             CFStringRef fileName = CFStringCreateWithFileSystemRepresentation(kCFAllocatorSystemDefault, dent->d_name);
             
@@ -1110,11 +1142,22 @@ CF_PRIVATE void _CFIterateDirectory(CFStringRef directoryPath, Boolean appendSla
                 // Regardless if it is a directory or a file, we need to append that result to pathPrefix, if pathPrefix is non-null
                 
                 // Do some checks to see if this is a directory, and if so make sure that we honor the appendSlash argument
+#if DEPLOYMENT_TARGET_HAIKU
+                stat(dent->d_name, &fileBuf);
+                if(S_ISDIR(fileBuf.st_mode)) {
+                    isDirectory = true;
+                }
+#else
                 if (dent->d_type == DT_DIR) {
                     isDirectory = true;
                 }
-#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_FREEBSD
-                else if (dent->d_type == DT_UNKNOWN) {
+#endif
+#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_FREEBSD || DEPLOYMENT_TARGET_HAIKU
+#if DEPLOYMENT_TARGET_HAIKU
+                else if (!S_ISDIR(fileBuf.st_mode)) {
+#else
+				else if (dent->d_type == DT_UNKNOWN) {
+#endif
                     // We need to do an additional stat on this to see if it's really a directory or not.
                     // This path should be uncommon.
                     struct stat statBuf;
@@ -1126,6 +1169,7 @@ CF_PRIVATE void _CFIterateDirectory(CFStringRef directoryPath, Boolean appendSla
                         isDirectory = S_ISDIR(statBuf.st_mode);
                     }
                 }
+
 #endif
             }
             
@@ -1154,9 +1198,12 @@ CF_PRIVATE void _CFIterateDirectory(CFStringRef directoryPath, Boolean appendSla
                 // Don't call the block with a NULL fileNameWithPrefix either - but here we can fallback to the fileName
                 fileNameWithPrefix = CFRetain(fileName);
             }
-            
-            Boolean result = fileHandler(fileName, fileNameWithPrefix, dent->d_type);
-            
+#if DEPLOYMENT_TARGET_HAIKU
+			stat(dent->d_name, &fileBuf);
+            Boolean result = fileHandler(fileName, fileNameWithPrefix, (S_ISDIR(fileBuf.st_mode & S_IFMT) == S_IFDIR) ? S_IFDIR : S_IFREG);
+#else
+            Boolean result = fileHandler(fileName, fileNameWithPrefix, dent->d_type);      
+#endif
             CFRelease(fileName);
             CFRelease(fileNameWithPrefix);
             if (!result) break;

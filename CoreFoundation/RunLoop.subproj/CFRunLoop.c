@@ -96,7 +96,20 @@ extern void _dispatch_main_queue_callback_4CF(void *_Null_unspecified msg);
 #define _dispatch_get_main_queue_port_4CF _dispatch_get_main_queue_handle_4CF
 #define _dispatch_main_queue_callback_4CF(x) _dispatch_main_queue_callback_4CF(x)
 #endif
+
+#elif DEPLOYMENT_TARGET_HAIKU
+#include <dlfcn.h>
+#include <poll.h>
+
+//dispatch_runloop_handle_t
+dispatch_io_handler_t _dispatch_get_main_queue_handle_4CF(void);
+extern void _dispatch_main_queue_callback_4CF(void *_Null_unspecified msg);
+
+#define _dispatch_get_main_queue_port_4CF _dispatch_get_main_queue_handle_4CF
+#define _dispatch_main_queue_callback_4CF(x) _dispatch_main_queue_callback_4CF(x)
 #endif
+
+
 
 #if DEPLOYMENT_TARGET_WINDOWS || DEPLOYMENT_TARGET_IPHONESIMULATOR || DEPLOYMENT_TARGET_LINUX
 CF_EXPORT pthread_t _CF_pthread_main_thread_np(void);
@@ -141,6 +154,14 @@ typedef	int kern_return_t;
 
 static pthread_t kNilPthreadT = (pthread_t)0;
 #define pthreadPointer(a) ((void*)a)
+typedef int kern_return_t;
+#define KERN_SUCCESS 0
+
+#elif DEPLOYMENT_TARGET_HAIKU
+
+static pthread_t kNilPthreadT = (pthread_t)0;
+#define pthreadPointer(a) a
+#define lockCount(a) a
 typedef int kern_return_t;
 #define KERN_SUCCESS 0
 
@@ -492,6 +513,52 @@ CF_INLINE kern_return_t __CFPortSetRemove(__CFPort port, __CFPortSet portSet) {
         return -1;
     }
     return epoll_ctl(portSet, EPOLL_CTL_DEL, port, NULL);
+}
+
+CF_INLINE void __CFPortSetFree(__CFPortSet portSet) {
+    close(portSet);
+}
+#elif DEPLOYMENT_TARGET_HAIKU
+typedef int __CFPort;
+#define CFPORT_NULL -1
+#define MACH_PORT_NULL CFPORT_NULL
+#define PTHREAD_DESTRUCTOR_ITERATIONS 4
+// epoll file descriptor
+typedef int __CFPortSet;
+#define CFPORTSET_NULL -1
+
+static __CFPort __CFPortAllocate(void) {
+    //return eventfd(0, EFD_CLOEXEC|EFD_NONBLOCK);
+}
+
+CF_INLINE void __CFPortFree(__CFPort port) {
+    close(port);
+}
+
+CF_INLINE __CFPortSet __CFPortSetAllocate(void) {
+    //return epoll_create1(EPOLL_CLOEXEC);
+    return -1;
+}
+
+CF_INLINE kern_return_t __CFPortSetInsert(__CFPort port, __CFPortSet portSet) {
+    if (CFPORT_NULL == port) {
+        return -1;
+    }
+    return -1;
+    //struct epoll_event event;
+    //memset(&event, 0, sizeof(event));
+    //event.data.fd = port;
+    //event.events = EPOLLIN|EPOLLET;
+    
+    //return epoll_ctl(portSet, EPOLL_CTL_ADD, port, &event);
+}
+
+CF_INLINE kern_return_t __CFPortSetRemove(__CFPort port, __CFPortSet portSet) {
+    if (CFPORT_NULL == port) {
+        return -1;
+    }
+    return -1;
+    //return epoll_ctl(portSet, EPOLL_CTL_DEL, port, NULL);
 }
 
 CF_INLINE void __CFPortSetFree(__CFPortSet portSet) {
@@ -2434,7 +2501,7 @@ static int __CFPollFileDescriptors(struct pollfd *fds, nfds_t nfds, uint64_t tim
             ts.tv_sec = delta / 1000000000UL;
             ts.tv_nsec = delta % 1000000000UL;
         }
-        
+
         result = ppoll(fds, 1, tsPtr, NULL);
         
         if (result == -1 && errno == EINTR) {
@@ -2561,6 +2628,104 @@ static Boolean __CFRunLoopWaitForMultipleObjects(__CFPortSet portSet, HANDLE *on
 
 #endif
 
+#if DEPLOYMENT_TARGET_HAIKU && !TARGET_OS_CYGWIN
+#define TIMEOUT_INFINITY UINT64_MAX
+
+static int __CFPollFileDescriptors(struct pollfd *fds, nfds_t nfds, uint64_t timeout) {
+    uint64_t elapsed = 0;
+    uint64_t start = mach_absolute_time();
+    int result = 0;
+    while (1) {
+        struct timespec ts = {0};
+        struct timespec *tsPtr = &ts;
+        if (timeout == TIMEOUT_INFINITY) {
+            tsPtr = NULL;
+            
+        } else if (elapsed < timeout) {
+            uint64_t delta = timeout - elapsed;
+            ts.tv_sec = delta / 1000000000UL;
+            ts.tv_nsec = delta % 1000000000UL;
+        }        
+        sigset_t origmask, newMask;
+        
+        sigprocmask(SIG_SETMASK, &origmask, &newMask);
+        
+        result = poll(fds, 1, tsPtr);
+        
+        sigprocmask(SIG_SETMASK, &origmask, NULL);
+
+        if (result == -1 && errno == EINTR) {
+            uint64_t end = mach_absolute_time();
+            elapsed += (end - start);
+            start = end;
+            
+        } else {
+            return result;
+        }
+    }
+}
+
+// pass in either a portSet or onePort. portSet is an epollfd, onePort is either a timerfd or an eventfd.
+// TODO: Better error handling. What should happen if we get an error on a file descriptor?
+static Boolean __CFRunLoopServiceFileDescriptors(__CFPortSet portSet, __CFPort onePort, uint64_t timeout, int *livePort) {
+    struct pollfd fdInfo = {
+        .fd = (onePort == CFPORT_NULL) ? portSet : onePort,
+        .events = POLLIN
+    };
+    
+    ssize_t result = __CFPollFileDescriptors(&fdInfo, 1, timeout);
+    if (result == 0)
+        return false;
+    
+    CFAssert2(result != -1, __kCFLogAssertion, "%s(): error %d from ppoll", __PRETTY_FUNCTION__, errno);
+    
+    int awokenFd;
+    
+    if (onePort != CFPORT_NULL) {
+        CFAssert1(0 == (fdInfo.revents & (POLLERR|POLLHUP)), __kCFLogAssertion, "%s(): ppoll reported error for fd", __PRETTY_FUNCTION__);
+        awokenFd = onePort;
+        
+    } else {
+    	// HAIKU FIXME
+        //struct epoll_event event;
+        do {
+        	// HAIKU FIXME
+            //result = epoll_wait(portSet, &event, 1 /*numEvents*/, 0 /*timeout*/);
+        } while (result == -1 && errno == EINTR);
+        CFAssert2(result >= 0, __kCFLogAssertion, "%s(): error %d from epoll_wait", __PRETTY_FUNCTION__, errno);
+        
+        if (result == 0) {
+            return false;
+        }
+        // HAIKU FIXME
+        //awokenFd = event.data.fd;
+    }
+    
+    // Now we acknowledge the wakeup. awokenFd is an eventfd (or possibly a
+    // timerfd ?). In either case, we read an 8-byte integer, as per eventfd(2)
+    // and timerfd_create(2).
+    uint64_t value;
+    do {
+        result = read(awokenFd, &value, sizeof(value));
+    } while (result == -1 && errno == EINTR);
+    
+    if (result == -1 && errno == EAGAIN) {
+        // Another thread stole the wakeup for this fd. (FIXME Can this actually
+        // happen?)
+        return false;
+    }
+    
+    CFAssert2(result == sizeof(value), __kCFLogAssertion, "%s(): error %d from read(2) while acknowledging wakeup", __PRETTY_FUNCTION__, errno);
+    
+    if (livePort)
+        *livePort = awokenFd;
+    
+    return true;
+}
+
+
+#endif
+
 struct __timeout_context {
 #if __HAS_DISPATCH__
     dispatch_source_t ds;
@@ -2601,7 +2766,7 @@ static int32_t __CFRunLoopRun(CFRunLoopRef rl, CFRunLoopModeRef rlm, CFTimeInter
 #if __HAS_DISPATCH__
     __CFPort dispatchPort = CFPORT_NULL;
     Boolean libdispatchQSafe = pthread_main_np() && ((HANDLE_DISPATCH_ON_BASE_INVOCATION_ONLY && NULL == previousMode) || (!HANDLE_DISPATCH_ON_BASE_INVOCATION_ONLY && 0 == _CFGetTSD(__CFTSDKeyIsInGCDMainQ)));
-    if (libdispatchQSafe && (CFRunLoopGetMain() == rl) && CFSetContainsValue(rl->_commonModes, rlm->_name)) dispatchPort = _dispatch_get_main_queue_port_4CF();
+    //if (libdispatchQSafe && (CFRunLoopGetMain() == rl) && CFSetContainsValue(rl->_commonModes, rlm->_name)) dispatchPort = _dispatch_get_main_queue_port_4CF();
 #endif
     
 #if USE_DISPATCH_SOURCE_FOR_TIMERS
@@ -2657,7 +2822,7 @@ static int32_t __CFRunLoopRun(CFRunLoopRef rl, CFRunLoopModeRef rlm, CFTimeInter
 #elif DEPLOYMENT_TARGET_WINDOWS || TARGET_OS_CYGWIN
         HANDLE livePort = NULL;
         Boolean windowsMessageReceived = false;
-#elif DEPLOYMENT_TARGET_LINUX
+#elif DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_HAIKU
         int livePort = -1;
 #endif
 	__CFPortSet waitSet = rlm->_portSet;
@@ -2683,7 +2848,7 @@ static int32_t __CFRunLoopRun(CFRunLoopRef rl, CFRunLoopModeRef rlm, CFTimeInter
             if (__CFRunLoopServiceMachPort(dispatchPort, &msg, sizeof(msg_buffer), &livePort, 0, &voucherState, NULL)) {
                 goto handle_msg;
             }
-#elif DEPLOYMENT_TARGET_LINUX && !TARGET_OS_CYGWIN
+#elif DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_HAIKU && !TARGET_OS_CYGWIN
             if (__CFRunLoopServiceFileDescriptors(CFPORTSET_NULL, dispatchPort, 0, &livePort)) {
                 goto handle_msg;
             }
@@ -2744,7 +2909,7 @@ static int32_t __CFRunLoopRun(CFRunLoopRef rl, CFRunLoopModeRef rlm, CFTimeInter
 #elif DEPLOYMENT_TARGET_WINDOWS
         // Here, use the app-supplied message queue mask. They will set this if they are interested in having this run loop receive windows messages.
         __CFRunLoopWaitForMultipleObjects(waitSet, NULL, poll ? 0 : TIMEOUT_INFINITY, rlm->_msgQMask, &livePort, &windowsMessageReceived);
-#elif DEPLOYMENT_TARGET_LINUX && !TARGET_OS_CYGWIN
+#elif DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_HAIKU && !TARGET_OS_CYGWIN
         __CFRunLoopServiceFileDescriptors(waitSet, CFPORT_NULL, TIMEOUT_INFINITY, &livePort);
 #endif
         
@@ -2844,7 +3009,7 @@ static int32_t __CFRunLoopRun(CFRunLoopRef rl, CFRunLoopModeRef rlm, CFTimeInter
             __CFRunLoopModeUnlock(rlm);
             __CFRunLoopUnlock(rl);
             _CFSetTSD(__CFTSDKeyIsInGCDMainQ, (void *)6, NULL);
-#if DEPLOYMENT_TARGET_WINDOWS || DEPLOYMENT_TARGET_LINUX
+#if DEPLOYMENT_TARGET_WINDOWS || DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_HAIKU
             void *msg = 0;
 #endif
             __CFRUNLOOP_IS_SERVICING_THE_MAIN_DISPATCH_QUEUE__(msg);
@@ -2867,7 +3032,7 @@ static int32_t __CFRunLoopRun(CFRunLoopRef rl, CFRunLoopModeRef rlm, CFTimeInter
 		    (void)mach_msg(reply, MACH_SEND_MSG, reply->msgh_size, 0, MACH_PORT_NULL, 0, MACH_PORT_NULL);
 		    CFAllocatorDeallocate(kCFAllocatorSystemDefault, reply);
 		}
-#elif DEPLOYMENT_TARGET_WINDOWS || (DEPLOYMENT_TARGET_LINUX && !TARGET_OS_CYGWIN)
+#elif DEPLOYMENT_TARGET_WINDOWS || (DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_HAIKU && !TARGET_OS_CYGWIN)
                 sourceHandledThisLoop = __CFRunLoopDoSource1(rl, rlm, rls) || sourceHandledThisLoop;
 #endif
 	    }
@@ -3000,6 +3165,11 @@ void CFRunLoopWakeUp(CFRunLoopRef rl) {
     CFAssert1(0 == ret, __kCFLogAssertion, "%s(): Unable to send wake message to eventfd", __PRETTY_FUNCTION__);
 #elif DEPLOYMENT_TARGET_WINDOWS
     SetEvent(rl->_wakeUpPort);
+#elif DEPLOYMENT_TARGET_HAIKU
+    int ret;
+    //do {
+       // Implement for Haiku
+    //} while (ret == -1 && errno == EINTR);
 #endif
     __CFRunLoopUnlock(rl);
 }
@@ -3573,6 +3743,10 @@ static CFStringRef __CFRunLoopSourceCopyDescription(CFTypeRef cf) {	/* DOES CALL
 	Dl_info info;
 	const char *name = (dladdr(addr, &info) && info.dli_saddr == addr && info.dli_sname) ? info.dli_sname : "???";
 	contextDesc = CFStringCreateWithFormat(kCFAllocatorSystemDefault, NULL, CFSTR("<CFRunLoopSource context>{version = %ld, info = %p, callout = %s (%p)}"), rls->_context.version0.version, rls->_context.version0.info, name, addr);
+#elif DEPLOYMENT_TARGET_HAIKU
+	Dl_info info;
+	const char *name = (dladdr((void*)addr, &info) && info.dli_saddr == addr && info.dli_sname) ? info.dli_sname : "???";
+	contextDesc = CFStringCreateWithFormat(kCFAllocatorSystemDefault, NULL, CFSTR("<CFRunLoopSource context>{version = %ld, info = %p, callout = %s (%p)}"), rls->_context.version0.version, rls->_context.version0.info, name, addr);
 #endif
     }
 #if DEPLOYMENT_TARGET_WINDOWS
@@ -3775,6 +3949,11 @@ static CFStringRef __CFRunLoopObserverCopyDescription(CFTypeRef cf) {	/* DOES CA
     Dl_info info;
     const char *name = (dladdr(addr, &info) && info.dli_saddr == addr && info.dli_sname) ? info.dli_sname : "???";
     result = CFStringCreateWithFormat(kCFAllocatorSystemDefault, NULL, CFSTR("<CFRunLoopObserver %p [%p]>{valid = %s, activities = 0x%lx, repeats = %s, order = %ld, callout = %s (%p), context = %@}"), cf, CFGetAllocator(rlo), __CFIsValid(rlo) ? "Yes" : "No", (long)rlo->_activities, __CFRunLoopObserverRepeats(rlo) ? "Yes" : "No", (long)rlo->_order, name, addr, contextDesc);
+#elif DEPLOYMENT_TARGET_HAIKU
+	void *addr = rlo->_callout;
+	Dl_info info;
+	const char *name = (dladdr((void*)addr, &info) && info.dli_saddr == addr && info.dli_sname) ? info.dli_sname : "???";
+	contextDesc = CFStringCreateWithFormat(kCFAllocatorSystemDefault, NULL, CFSTR("<CFRunLoopSource context>{version = %ld, info = %p, callout = %s (%p)}"), rls->_context.version0.version, rls->_context.version0.info, name, addr);
 #endif
     CFRelease(contextDesc);
     return result;

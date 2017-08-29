@@ -45,6 +45,9 @@
 #include <io.h>
 #endif
 
+#if DEPLOYMENT_TARGET_HAIKU
+#define RTLD_NOLOAD RTLD_LOCAL
+#endif
 
 static void _CFBundleFlushBundleCachesAlreadyLocked(CFBundleRef bundle, Boolean alreadyLocked);
 

@@ -15,11 +15,11 @@
 #include <CoreFoundation/CFByteOrder.h>
 #include <CoreFoundation/CFURLAccess.h>
 
-#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_FREEBSD
+#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_FREEBSD || DEPLOYMENT_TARGET_HAIKU
 #if TARGET_OS_CYGWIN
 #else
 #include <dirent.h>
-#if !TARGET_OS_ANDROID
+#if !TARGET_OS_ANDROID && !DEPLOYMENT_TARGET_HAIKU
 #include <sys/sysctl.h>
 #endif
 #include <sys/mman.h>
@@ -31,7 +31,7 @@
 
 #define _CFBundleNumberOfPlatforms 7
 static CFStringRef _CFBundleSupportedPlatforms[_CFBundleNumberOfPlatforms] = { NULL, NULL, NULL, NULL, NULL, NULL, NULL };
-static const char *_CFBundleSupportedPlatformStrings[_CFBundleNumberOfPlatforms] = { "iphoneos", "macos", "windows", "linux", "freebsd", "solaris", "hpux" };
+static const char *_CFBundleSupportedPlatformStrings[_CFBundleNumberOfPlatforms] = { "iphoneos", "macos", "windows", "linux", "freebsd", "solaris", "hpux", "haiku"};
 
 #define _CFBundleNumberOfProducts 3
 static CFStringRef _CFBundleSupportedProducts[_CFBundleNumberOfProducts] = { NULL, NULL, NULL };
@@ -58,7 +58,7 @@ static CFStringRef _CFBundleSupportedPlatforms[_CFBundleNumberOfPlatforms] = { C
 #else
 // On other platforms, we support the following platforms
 #define _CFBundleNumberOfPlatforms 7
-static CFStringRef _CFBundleSupportedPlatforms[_CFBundleNumberOfPlatforms] = { CFSTR("iphoneos"), CFSTR("macos"), CFSTR("windows"), CFSTR("linux"), CFSTR("freebsd"), CFSTR("solaris"), CFSTR("hpux") };
+static CFStringRef _CFBundleSupportedPlatforms[_CFBundleNumberOfPlatforms] = { CFSTR("iphoneos"), CFSTR("macos"), CFSTR("windows"), CFSTR("linux"), CFSTR("freebsd"), CFSTR("solaris"), CFSTR("hpux") , CFSTR("solaris"), CFSTR("haiku") };
 #endif
 
 #define _CFBundleNumberOfProducts 3
@@ -149,6 +149,8 @@ CF_EXPORT CFStringRef _CFGetPlatformName(void) {
 #endif
 #elif DEPLOYMENT_TARGET_FREEBSD
     return _CFBundleFreeBSDPlatformName;
+#elif DEPLOYMENT_TARGET_HAIKU
+    return _CFBundleHaikuPlatformName;
 #else
 #error Unknown or unspecified DEPLOYMENT_TARGET
 #endif
@@ -169,6 +171,8 @@ CF_EXPORT CFStringRef _CFGetAlternatePlatformName(void) {
 #endif
 #elif DEPLOYMENT_TARGET_FREEBSD
     return CFSTR("FreeBSD");
+#elif DEPLOYMENT_TARGET_HAIKU
+    return CFSTR("Haiku");
 #else
 #error Unknown or unspecified DEPLOYMENT_TARGET
 #endif

@@ -11,7 +11,9 @@ elif Configuration.current.target.sdk == OSType.FreeBSD:
 	cf.CFLAGS = '-DDEPLOYMENT_TARGET_FREEBSD -I/usr/local/include -I/usr/local/include/libxml2 '
 elif Configuration.current.target.sdk == OSType.MacOSX:
 	cf.CFLAGS = '-DDEPLOYMENT_TARGET_MACOSX '
-
+elif Configuration.current.target.sdk == OSType.Haiku:
+	cf.CFLAGS = '-DDEPLOYMENT_TARGET_HAIKU -I/system/develop/headers -I/system/develop/headers/posix -I/system/develop/headers/libxml2 '
+	
 cf.ASFLAGS = " ".join([
 	'-DCF_CHARACTERSET_BITMAP=\\"CharacterSets/CFCharacterSetBitmaps.bitmap\\"',
         '-DCF_CHARACTERSET_UNICHAR_DB=\\"CharacterSets/CFUniCharPropertyDatabase.data\\"',

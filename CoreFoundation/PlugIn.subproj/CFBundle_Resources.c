@@ -25,10 +25,12 @@
 #include <errno.h>
 #include <sys/types.h>
 
-#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX
+#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_HAIKU
 #include <unistd.h>
 #if !TARGET_OS_ANDROID
+#if !!TARGET_OS_HAIKU
 #include <sys/sysctl.h>
+#endif
 #endif
 #include <sys/stat.h>
 #include <dirent.h>
@@ -238,6 +240,12 @@ CF_PRIVATE uint8_t _CFBundleGetBundleVersionForURL(CFURLRef url) {
     _CFIterateDirectory(directoryPath, false, NULL, ^Boolean (CFStringRef fileName, CFStringRef fileNameWithPrefix, uint8_t fileType) {
         // We're looking for a few different names, and also some info on if it's a directory or not.
         // We don't stop looking once we find one of the names. Otherwise we could run into the situation where we have both "Contents" and "Resources" in a framework, and we see Contents first but Resources is more important.
+
+#if DEPLOYMENT_TARGET_HAIKU
+#define DT_DIR 4
+#define DT_REG 8
+#define DT_LNK 10
+#endif
         if (fileType == DT_DIR || fileType == DT_LNK) {
             CFIndex fileNameLen = CFStringGetLength(fileName);
             if (fileNameLen == resourcesDirectoryLength && CFStringCompareWithOptions(fileName, _CFBundleResourcesDirectoryName, CFRangeMake(0, resourcesDirectoryLength), kCFCompareCaseInsensitive) == kCFCompareEqualTo) {
@@ -316,6 +324,8 @@ CF_EXPORT CFStringRef _CFBundleGetCurrentPlatform(void) {
 #endif
 #elif DEPLOYMENT_TARGET_FREEBSD
     return CFSTR("FreeBSD");
+#elif DEPLOYMENT_TARGET_HAIKU
+    return CFSTR("Haiku");
 #else
 #error Unknown or unspecified DEPLOYMENT_TARGET
 #endif
@@ -338,6 +348,8 @@ CF_PRIVATE CFStringRef _CFBundleGetPlatformExecutablesSubdirectoryName(void) {
 #endif
 #elif DEPLOYMENT_TARGET_FREEBSD
     return CFSTR("FreeBSD");
+#elif DEPLOYMENT_TARGET_HAIKU
+    return CFSTR("Haiku");
 #else
 #error Unknown or unspecified DEPLOYMENT_TARGET
 #endif
@@ -360,6 +372,8 @@ CF_PRIVATE CFStringRef _CFBundleGetAlternatePlatformExecutablesSubdirectoryName(
 #endif
 #elif DEPLOYMENT_TARGET_FREEBSD
     return CFSTR("FreeBSD");
+#elif DEPLOYMENT_TARGET_HAIKU
+    return CFSTR("Haiku");
 #else
 #error Unknown or unspecified DEPLOYMENT_TARGET
 #endif
@@ -378,6 +392,8 @@ CF_PRIVATE CFStringRef _CFBundleGetOtherPlatformExecutablesSubdirectoryName(void
     return CFSTR("Other");
 #elif DEPLOYMENT_TARGET_FREEBSD
     return CFSTR("Other");
+#elif DEPLOYMENT_TARGET_HAIKU
+    return CFSTR("Other");
 #else
 #error Unknown or unspecified DEPLOYMENT_TARGET
 #endif
@@ -395,6 +411,8 @@ CF_PRIVATE CFStringRef _CFBundleGetOtherAlternatePlatformExecutablesSubdirectory
 #elif DEPLOYMENT_TARGET_LINUX
     return CFSTR("Other");
 #elif DEPLOYMENT_TARGET_FREEBSD
+    return CFSTR("Other");
+#elif DEPLOYMENT_TARGET_HAIKU
     return CFSTR("Other");
 #else
 #error Unknown or unspecified DEPLOYMENT_TARGET

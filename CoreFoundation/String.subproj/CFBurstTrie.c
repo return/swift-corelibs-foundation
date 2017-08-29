@@ -18,7 +18,7 @@
 #include <fcntl.h>
 #include <sys/stat.h>
 #include <limits.h>
-#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX
+#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_HAIKU
 #include <unistd.h>
 #include <sys/param.h>
 #include <sys/mman.h>
@@ -362,8 +362,12 @@ CFBurstTrieRef CFBurstTrieCreateFromFile(CFStringRef path) {
     
     char *map = (char *)MapViewOfFile(mapHandle, FILE_MAP_READ, 0, 0, sb.st_size);
     if (!map) return NULL;
+#else
+#if DEPLOYMENT_TARGET_HAIKU
+    char *map = mmap(0, sb.st_size, PROT_READ, MAP_SHARED, fd, 0);
 #else            
     char *map = mmap(0, sb.st_size, PROT_READ, MAP_FILE|MAP_SHARED, fd, 0);
+#endif
 #endif
     
     CFBurstTrieRef trie = NULL;
@@ -647,7 +651,12 @@ Boolean CFBurstTrieSerializeWithFileDescriptor(CFBurstTrieRef trie, int fd, CFBu
         trie->mapHandle = mapHandle;
         trie->mappedFileHandle = mappedFileHandle;
 #else
+
+#if DEPLOYMENT_TARGET_HAIKU
+        trie->mapBase = mmap(0, trie->mapSize, PROT_READ, MAP_SHARED, fd, start_offset);
+#else   
         trie->mapBase = mmap(0, trie->mapSize, PROT_READ, MAP_FILE|MAP_SHARED, fd, start_offset);
+#endif
 #endif
         success = true;
     }

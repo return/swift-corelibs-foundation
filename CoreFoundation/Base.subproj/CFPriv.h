@@ -564,7 +564,10 @@ CF_EXPORT CFMessagePortRef _CFMessagePortCreateLocalEx(CFAllocatorRef allocator,
 // Avoid including the pthread header
 #ifndef HAVE_STRUCT_TIMESPEC
 #define HAVE_STRUCT_TIMESPEC 1
+#if !TARGET_OS_HAIKU
+#else
 struct timespec { long tv_sec; long tv_nsec; };
+#endif
 #endif
 #endif
 

@@ -196,7 +196,7 @@ CF_PRIVATE CFStringRef _CFProcessNameString(void) {
 }
 
 
-#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_FREEBSD
+#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_FREEBSD || DEPLOYMENT_TARGET_HAIKU
 
 #include <pwd.h>
 #include <sys/param.h>
@@ -252,7 +252,7 @@ CF_EXPORT CFStringRef CFGetUserName(void) {
 
 CF_EXPORT CFStringRef CFCopyUserName(void) {
     CFStringRef result = NULL;
-#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_FREEBSD
+#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_HAIKU
     uid_t euid;
     __CFGetUGIDs(&euid, NULL);
     struct passwd *upwd = getpwuid(euid ? euid : getuid());
@@ -286,7 +286,7 @@ CF_EXPORT CFStringRef CFCopyUserName(void) {
 }
 
 CFURLRef CFCopyHomeDirectoryURL(void) {
-#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_FREEBSD
+#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_FREEBSD || DEPLOYMENT_TARGET_HAIKU
     return _CFCopyHomeDirURLForUser(NULL, true);
 #elif DEPLOYMENT_TARGET_WINDOWS
     CFURLRef retVal = NULL;
@@ -366,7 +366,7 @@ CF_EXPORT CFURLRef CFCopyHomeDirectoryURLForUser(CFStringRef uName) {
         }
     }
 #endif
-#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_FREEBSD
+#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_FREEBSD || DEPLOYMENT_TARGET_HAIKU
     if (!uName) {
         return _CFCopyHomeDirURLForUser(NULL, true);
     } else {
@@ -584,7 +584,7 @@ CF_PRIVATE void __CFTSDInitialize() {
 static void __CFTSDSetSpecific(void *arg) {
 #if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI
     pthread_setspecific(__CFTSDIndexKey, arg);
-#elif DEPLOYMENT_TARGET_LINUX
+#elif DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_HAIKU
     pthread_setspecific(__CFTSDIndexKey, arg);
 #elif DEPLOYMENT_TARGET_WINDOWS
     TlsSetValue(__CFTSDIndexKey, arg);
@@ -594,7 +594,7 @@ static void __CFTSDSetSpecific(void *arg) {
 static void *__CFTSDGetSpecific() {
 #if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI
     return pthread_getspecific(__CFTSDIndexKey);
-#elif DEPLOYMENT_TARGET_LINUX
+#elif DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_HAIKU
     return pthread_getspecific(__CFTSDIndexKey);
 #elif DEPLOYMENT_TARGET_WINDOWS
     return TlsGetValue(__CFTSDIndexKey);
@@ -628,6 +628,10 @@ static void __CFTSDFinalize(void *arg) {
             table->destructors[i]((void *)(old));
         }
     }
+    // Haiku Hack 
+    #if defined(__HAIKU__)
+    #define PTHREAD_DESTRUCTOR_ITERATIONS 4
+    #endif
     
     if (table->destructorCount == PTHREAD_DESTRUCTOR_ITERATIONS - 1) {    // On PTHREAD_DESTRUCTOR_ITERATIONS-1 call, destroy our data
         free(table);
@@ -1080,7 +1084,7 @@ CF_PRIVATE int _NS_gettimeofday(struct timeval *tv, struct timezone *tz) {
 #pragma mark -
 #pragma mark Linux OSAtomic
 
-#if defined(DEPLOYMENT_TARGET_LINUX) || defined(DEPLOYMENT_TARGET_FREEBSD)
+#if defined(DEPLOYMENT_TARGET_LINUX) || defined(DEPLOYMENT_TARGET_FREEBSD) || defined(DEPLOYMENT_TARGET_HAIKU)
 
 bool OSAtomicCompareAndSwapPtr(void *oldp, void *newp, void *volatile *dst) 
 { 

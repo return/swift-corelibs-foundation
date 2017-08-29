@@ -943,8 +943,14 @@ Boolean __CFSocketGetBytesAvailable(CFSocketRef s, CFIndex* ctBytesAvailable) {
 #include <libc.h>
 #include <dlfcn.h>
 #endif
-#if TARGET_OS_CYGWIN
+#if TARGET_OS_CYGWIN || DEPLOYMENT_TARGET_HAIKU
 #include <sys/socket.h>
+#endif
+#if DEPLOYMENT_TARGET_HAIKU
+#include <OS.h>
+#include <sys/select.h>
+#include <sys/time.h>
+#include <ByteOrder.h>
 #endif
 #include <arpa/inet.h>
 #include <sys/ioctl.h>
@@ -957,6 +963,8 @@ Boolean __CFSocketGetBytesAvailable(CFSocketRef s, CFIndex* ctBytesAvailable) {
 #include <CoreFoundation/CFString.h>
 #include <CoreFoundation/CFPropertyList.h>
 #include "CFInternal.h"
+
+
 
 #ifndef NBBY
 #define NBBY 8
@@ -1002,8 +1010,11 @@ CF_PRIVATE int _NS_gettimeofday(struct timeval *tv, struct timezone *tz);
 
 #if defined(LOG_CFSOCKET)
 
+#if DEPLOYMENT_TARGET_HAIKU
+#include <syslog.h>
+#else
 #include <sys/syslog.h>
-
+#endif
 static pthread_t __cfSocketTid()
 {
 #if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED
@@ -1094,7 +1105,7 @@ static void __cfSocketLogWithSocket(CFSocketRef s, const char* function, int lin
 #endif
 
 
-#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_FREEBSD
+#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_FREEBSD || DEPLOYMENT_TARGET_HAIKU
 #define INVALID_SOCKET (CFSocketNativeHandle)(-1)
 #define closesocket(a) close((a))
 #define ioctlsocket(a,b,c) ioctl((a),(b),(c))
@@ -2153,7 +2164,7 @@ static void *__CFSocketManager(void * arg)
 {
 #if (DEPLOYMENT_TARGET_LINUX && !TARGET_OS_CYGWIN) || DEPLOYMENT_TARGET_FREEBSD
     pthread_setname_np(pthread_self(), "com.apple.CFSocket.private");
-#elif TARGET_OS_CYGWIN
+#elif TARGET_OS_CYGWIN || DEPLOYMENT_TARGET_HAIKU
 #else
     pthread_setname_np("com.apple.CFSocket.private");
 #endif
@@ -2595,7 +2606,7 @@ static CFSocketRef _CFSocketCreateWithNative(CFAllocatorRef allocator, CFSocketN
     
     if (INVALID_SOCKET != sock) CFDictionaryAddValue(__CFAllSockets, (void *)(uintptr_t)sock, memory);
     if (NULL == __CFSocketManagerThread) {
-#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_FREEBSD
+#if DEPLOYMENT_TARGET_MACOSX || DEPLOYMENT_TARGET_EMBEDDED || DEPLOYMENT_TARGET_EMBEDDED_MINI || DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_FREEBSD || DEPLOYMENT_TARGET_HAIKU
         pthread_t tid = 0;
         pthread_attr_t attr;
         pthread_attr_init(&attr);

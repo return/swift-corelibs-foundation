@@ -48,7 +48,7 @@ __kCFRetainEvent = 28,
 __kCFReleaseEvent = 29
 };
 
-#if DEPLOYMENT_TARGET_WINDOWS || DEPLOYMENT_TARGET_LINUX
+#if DEPLOYMENT_TARGET_WINDOWS || DEPLOYMENT_TARGET_LINUX || DEPLOYMENT_TARGET_HAIKU
 #include <malloc.h>
 #elif DEPLOYMENT_TARGET_FREEBSD
 #include <stdlib.h> // malloc()

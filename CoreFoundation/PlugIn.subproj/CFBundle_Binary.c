@@ -33,6 +33,10 @@
 #endif
 #endif /* BINARY_SUPPORT_DLFCN */
 
+#if DEPLOYMENT_TARGET_HAIKU
+#define RTLD_NOLOAD RTLD_LOCAL
+#endif
+
 #if BINARY_SUPPORT_DYLD
 static CFStringRef _CFBundleDYLDCopyLoadedImagePathForPointer(void *p);
 #if !BINARY_SUPPORT_DLFCN
